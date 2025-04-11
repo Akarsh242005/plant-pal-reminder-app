@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,7 +62,16 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				// PlantPal custom colors
+				plantpal: {
+					primary: '#4CAF50',    // Main green
+					secondary: '#81C784',  // Light green
+					dark: '#2E7D32',       // Dark green
+					accent: '#FF9800',     // Orange accent
+					light: '#E8F5E9',      // Very light green background
+					gray: '#607D8B',       // Muted blue-gray
+				},
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -84,11 +94,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'plant-grow': {
+					'0%': { transform: 'translateY(10px) scale(0.95)', opacity: '0.5' },
+					'100%': { transform: 'translateY(0) scale(1)', opacity: '1' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'plant-grow': 'plant-grow 0.5s ease-out forwards'
 			}
 		}
 	},
