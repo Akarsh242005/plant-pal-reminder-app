@@ -2,8 +2,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthState, User } from '@/types';
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { Session } from '@supabase/supabase-js';
+import { client, connectToMongoDB, dbName } from "@/integrations/mongodb/client";
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   auth: AuthState;
@@ -13,6 +13,8 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
+const AUTH_STORAGE_KEY = 'plantpal_auth';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -21,82 +23,63 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isAuthenticated: false,
     token: null,
   });
-  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Set up auth state listener and check for existing session
+  // Initial load from localStorage
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        
-        if (session?.user) {
-          // Map Supabase user to our User type
-          const user: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata.name,
-          };
-          
-          setAuth({
-            user,
-            isAuthenticated: true,
-            token: session.access_token,
-          });
-        } else {
-          // No session, user is logged out
-          setAuth({
-            user: null,
-            isAuthenticated: false,
-            token: null,
-          });
-        }
-        
-        setIsLoading(false);
+    const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (storedAuth) {
+      try {
+        const parsedAuth = JSON.parse(storedAuth);
+        setAuth(parsedAuth);
+      } catch (error) {
+        console.error('Error parsing stored auth:', error);
+        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      
-      if (session?.user) {
-        // Map Supabase user to our User type
-        const user: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata.name,
-        };
-        
-        setAuth({
-          user,
-          isAuthenticated: true,
-          token: session.access_token,
-        });
-      }
-      
-      setIsLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    }
+    setIsLoading(false);
   }, []);
+
+  // Update localStorage whenever auth changes
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
+    } else {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+  }, [auth]);
 
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const db = await connectToMongoDB();
+      const usersCollection = db.collection('users');
       
-      if (error) {
-        throw error;
+      // Find user by email
+      const user = await usersCollection.findOne({ email });
+      
+      if (!user) {
+        throw new Error('User not found');
       }
       
+      // In a real app, you should hash passwords and compare the hashed values
+      if (user.password !== password) {
+        throw new Error('Invalid password');
+      }
+      
+      // Create auth state
+      const authState: AuthState = {
+        user: {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name || '',
+        },
+        isAuthenticated: true,
+        token: uuidv4(), // Generate a simple token
+      };
+      
+      setAuth(authState);
       toast.success("Successfully logged in!");
     } catch (error: any) {
       console.error('Login error:', error);
@@ -111,21 +94,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-        },
-      });
+      const db = await connectToMongoDB();
+      const usersCollection = db.collection('users');
       
-      if (error) {
-        throw error;
+      // Check if user already exists
+      const existingUser = await usersCollection.findOne({ email });
+      if (existingUser) {
+        throw new Error('User with this email already exists');
       }
       
-      toast.success("Successfully registered! Please check your email to verify your account.");
+      // Create new user
+      // In a real app, you should hash the password
+      const result = await usersCollection.insertOne({
+        email,
+        password, // Should be hashed in production
+        name,
+        createdAt: new Date(),
+      });
+      
+      if (!result.acknowledged) {
+        throw new Error('Failed to create user');
+      }
+      
+      // Create auth state
+      const authState: AuthState = {
+        user: {
+          id: result.insertedId.toString(),
+          email,
+          name,
+        },
+        isAuthenticated: true,
+        token: uuidv4(), // Generate a simple token
+      };
+      
+      setAuth(authState);
+      toast.success("Successfully registered!");
     } catch (error: any) {
       console.error('Registration error:', error);
       toast.error(error.message || "Registration failed. Please try again.");
@@ -138,12 +141,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        throw error;
-      }
-      
+      setAuth({
+        user: null,
+        isAuthenticated: false,
+        token: null,
+      });
       toast.info("You have been logged out.");
     } catch (error) {
       console.error('Logout error:', error);

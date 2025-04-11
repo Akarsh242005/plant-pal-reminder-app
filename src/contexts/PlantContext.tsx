@@ -3,7 +3,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { Plant } from '@/types';
 import { useAuth } from './AuthContext';
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { ObjectId } from 'mongodb';
+import { connectToMongoDB } from "@/integrations/mongodb/client";
 import { v4 as uuidv4 } from 'uuid';
 
 interface PlantContextType {
@@ -18,9 +19,8 @@ interface PlantContextType {
 const PlantContext = createContext<PlantContextType | undefined>(undefined);
 
 // Sample plant data for first-time users
-const SAMPLE_PLANTS: Plant[] = [
+const SAMPLE_PLANTS: Omit<Plant, 'id'>[] = [
   {
-    id: '1',
     name: 'Snake Plant',
     species: 'Sansevieria trifasciata',
     lastWatered: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -29,7 +29,6 @@ const SAMPLE_PLANTS: Plant[] = [
     location: 'Living Room',
   },
   {
-    id: '2',
     name: 'Monstera',
     species: 'Monstera deliciosa',
     lastWatered: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -39,7 +38,6 @@ const SAMPLE_PLANTS: Plant[] = [
     notes: 'Likes bright, indirect light'
   },
   {
-    id: '3',
     name: 'Fiddle Leaf Fig',
     species: 'Ficus lyrata',
     lastWatered: new Date().toISOString(),
@@ -55,7 +53,7 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load plants from Supabase on mount and when auth changes
+  // Load plants from MongoDB on mount and when auth changes
   useEffect(() => {
     const loadPlants = async () => {
       if (!auth.isAuthenticated || !auth.user) {
@@ -67,24 +65,21 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true);
       
       try {
-        // Fetch plants from Supabase
-        const { data, error } = await supabase
-          .from('plants')
-          .select('*')
-          .eq('user_id', auth.user.id);
+        const db = await connectToMongoDB();
+        const plantsCollection = db.collection('plants');
         
-        if (error) {
-          throw error;
-        }
-
-        if (data && data.length > 0) {
+        // Fetch plants for the current user
+        const cursor = plantsCollection.find({ userId: auth.user.id });
+        const userPlants = await cursor.toArray();
+        
+        if (userPlants && userPlants.length > 0) {
           // Map database fields to our Plant type
-          const mappedPlants = data.map(plant => ({
-            id: plant.id,
+          const mappedPlants = userPlants.map(plant => ({
+            id: plant._id.toString(),
             name: plant.name,
             species: plant.species,
-            lastWatered: plant.last_watered,
-            waterFrequency: plant.water_frequency,
+            lastWatered: plant.lastWatered,
+            waterFrequency: plant.waterFrequency,
             image: plant.image || undefined,
             notes: plant.notes || undefined,
             location: plant.location || undefined,
@@ -92,9 +87,25 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
           
           setPlants(mappedPlants);
         } else {
-          // First login, use sample data
+          // First login, add sample plants
           await addSamplePlants(auth.user.id);
-          setPlants(SAMPLE_PLANTS);
+          
+          // After adding sample plants, fetch them again
+          const newCursor = plantsCollection.find({ userId: auth.user.id });
+          const newUserPlants = await newCursor.toArray();
+          
+          const mappedSamplePlants = newUserPlants.map(plant => ({
+            id: plant._id.toString(),
+            name: plant.name,
+            species: plant.species,
+            lastWatered: plant.lastWatered,
+            waterFrequency: plant.waterFrequency,
+            image: plant.image || undefined,
+            notes: plant.notes || undefined,
+            location: plant.location || undefined,
+          }));
+          
+          setPlants(mappedSamplePlants);
         }
       } catch (error) {
         console.error('Failed to load plants', error);
@@ -111,24 +122,23 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
   // Helper function to add sample plants on first login
   const addSamplePlants = async (userId: string) => {
     try {
+      const db = await connectToMongoDB();
+      const plantsCollection = db.collection('plants');
+      
       const samplePlantsWithUserId = SAMPLE_PLANTS.map(plant => ({
         name: plant.name,
         species: plant.species,
-        last_watered: plant.lastWatered,
-        water_frequency: plant.waterFrequency,
+        lastWatered: plant.lastWatered,
+        waterFrequency: plant.waterFrequency,
         image: plant.image,
         notes: plant.notes,
         location: plant.location,
-        user_id: userId,
+        userId: userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       }));
 
-      const { error } = await supabase
-        .from('plants')
-        .insert(samplePlantsWithUserId);
-
-      if (error) {
-        throw error;
-      }
+      await plantsCollection.insertMany(samplePlantsWithUserId);
     } catch (error) {
       console.error('Error adding sample plants:', error);
     }
@@ -143,36 +153,44 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     
     try {
-      // Insert into Supabase
-      const { data, error } = await supabase
-        .from('plants')
-        .insert({
-          name: plantData.name,
-          species: plantData.species,
-          water_frequency: plantData.waterFrequency,
-          last_watered: plantData.lastWatered,
-          image: plantData.image,
-          notes: plantData.notes,
-          location: plantData.location,
-          user_id: auth.user.id,
-        })
-        .select()
-        .single();
+      const db = await connectToMongoDB();
+      const plantsCollection = db.collection('plants');
       
-      if (error) {
-        throw error;
+      // Insert into MongoDB
+      const result = await plantsCollection.insertOne({
+        name: plantData.name,
+        species: plantData.species,
+        waterFrequency: plantData.waterFrequency,
+        lastWatered: plantData.lastWatered,
+        image: plantData.image,
+        notes: plantData.notes,
+        location: plantData.location,
+        userId: auth.user.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      
+      if (!result.acknowledged) {
+        throw new Error('Failed to add plant');
+      }
+      
+      // Get the inserted document
+      const insertedPlant = await plantsCollection.findOne({ _id: result.insertedId });
+      
+      if (!insertedPlant) {
+        throw new Error('Could not find inserted plant');
       }
       
       // Map database response to Plant type
       const newPlant: Plant = {
-        id: data.id,
-        name: data.name,
-        species: data.species,
-        lastWatered: data.last_watered,
-        waterFrequency: data.water_frequency,
-        image: data.image || undefined,
-        notes: data.notes || undefined,
-        location: data.location || undefined,
+        id: insertedPlant._id.toString(),
+        name: insertedPlant.name,
+        species: insertedPlant.species,
+        lastWatered: insertedPlant.lastWatered,
+        waterFrequency: insertedPlant.waterFrequency,
+        image: insertedPlant.image || undefined,
+        notes: insertedPlant.notes || undefined,
+        location: insertedPlant.location || undefined,
       };
       
       // Update local state
@@ -190,25 +208,30 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     
     try {
+      const db = await connectToMongoDB();
+      const plantsCollection = db.collection('plants');
+      
       // Prepare the update data
-      const updateData: any = {};
+      const updateData: any = {
+        updatedAt: new Date()
+      };
+      
       if (plantData.name) updateData.name = plantData.name;
       if (plantData.species) updateData.species = plantData.species;
-      if (plantData.waterFrequency) updateData.water_frequency = plantData.waterFrequency;
-      if (plantData.lastWatered) updateData.last_watered = plantData.lastWatered;
+      if (plantData.waterFrequency) updateData.waterFrequency = plantData.waterFrequency;
+      if (plantData.lastWatered) updateData.lastWatered = plantData.lastWatered;
       if ('image' in plantData) updateData.image = plantData.image;
       if ('notes' in plantData) updateData.notes = plantData.notes;
       if ('location' in plantData) updateData.location = plantData.location;
-      updateData.updated_at = new Date().toISOString();
       
-      // Update in Supabase
-      const { error } = await supabase
-        .from('plants')
-        .update(updateData)
-        .eq('id', id);
+      // Update in MongoDB
+      const result = await plantsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData }
+      );
       
-      if (error) {
-        throw error;
+      if (!result.acknowledged) {
+        throw new Error('Failed to update plant');
       }
       
       // Update local state
@@ -231,14 +254,14 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
     const plantName = plants.find(p => p.id === id)?.name;
     
     try {
-      // Delete from Supabase
-      const { error } = await supabase
-        .from('plants')
-        .delete()
-        .eq('id', id);
+      const db = await connectToMongoDB();
+      const plantsCollection = db.collection('plants');
       
-      if (error) {
-        throw error;
+      // Delete from MongoDB
+      const result = await plantsCollection.deleteOne({ _id: new ObjectId(id) });
+      
+      if (!result.acknowledged || result.deletedCount === 0) {
+        throw new Error('Failed to delete plant');
       }
       
       // Update local state
@@ -254,14 +277,22 @@ export const PlantProvider = ({ children }: { children: ReactNode }) => {
     const today = new Date().toISOString();
     
     try {
-      // Update in Supabase
-      const { error } = await supabase
-        .from('plants')
-        .update({ last_watered: today, updated_at: today })
-        .eq('id', id);
+      const db = await connectToMongoDB();
+      const plantsCollection = db.collection('plants');
       
-      if (error) {
-        throw error;
+      // Update in MongoDB
+      const result = await plantsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { 
+          $set: { 
+            lastWatered: today,
+            updatedAt: new Date()
+          } 
+        }
+      );
+      
+      if (!result.acknowledged) {
+        throw new Error('Failed to update plant');
       }
       
       // Update local state
