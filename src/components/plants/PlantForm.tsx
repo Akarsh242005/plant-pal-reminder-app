@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -49,22 +48,18 @@ const PlantForm = ({ plant, mode }: PlantFormProps) => {
     setIsSubmitting(true);
     
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       if (mode === "add") {
-        // Ensure all required fields are present for the Plant type
-        addPlant({
+        await addPlant({
           name: values.name,
           species: values.species,
           waterFrequency: values.waterFrequency,
           lastWatered: new Date().toISOString(),
-          image: values.image,
+          image: values.image || undefined,
           notes: values.notes,
           location: values.location,
         });
       } else if (mode === "edit" && plant) {
-        updatePlant(plant.id, values);
+        await updatePlant(plant.id, values);
       }
       
       navigate("/dashboard");

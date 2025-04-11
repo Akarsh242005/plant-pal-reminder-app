@@ -2,131 +2,155 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthState, User } from '@/types';
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   auth: AuthState;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// For demo purposes, we'll use localStorage to store mock auth data
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [auth, setAuth] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
     token: null,
   });
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing auth on mount
+  // Set up auth state listener and check for existing session
   useEffect(() => {
-    const storedAuth = localStorage.getItem('plantpal_auth');
-    if (storedAuth) {
-      try {
-        setAuth(JSON.parse(storedAuth));
-      } catch (error) {
-        console.error('Failed to parse auth data', error);
-        localStorage.removeItem('plantpal_auth');
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Map Supabase user to our User type
+          const user: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata.name,
+          };
+          
+          setAuth({
+            user,
+            isAuthenticated: true,
+            token: session.access_token,
+          });
+        } else {
+          // No session, user is logged out
+          setAuth({
+            user: null,
+            isAuthenticated: false,
+            token: null,
+          });
+        }
+        
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      
+      if (session?.user) {
+        // Map Supabase user to our User type
+        const user: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata.name,
+        };
+        
+        setAuth({
+          user,
+          isAuthenticated: true,
+          token: session.access_token,
+        });
+      }
+      
+      setIsLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Save auth to localStorage whenever it changes
-  useEffect(() => {
-    if (auth.isAuthenticated && auth.user) {
-      localStorage.setItem('plantpal_auth', JSON.stringify(auth));
-    } else {
-      localStorage.removeItem('plantpal_auth');
-    }
-  }, [auth]);
-
-  // Mock login function (would connect to actual API in production)
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // For demo purposes, just check email format and any password
-      if (!email.includes('@') || password.length < 6) {
-        throw new Error('Invalid credentials');
-      }
-      
-      // Mock successful login
-      const mockUser: User = {
-        id: '1',
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        name: email.split('@')[0],
-      };
-      
-      const mockToken = 'mock_jwt_token_' + Date.now();
-      
-      setAuth({
-        user: mockUser,
-        isAuthenticated: true,
-        token: mockToken,
+        password,
       });
       
+      if (error) {
+        throw error;
+      }
+      
       toast.success("Successfully logged in!");
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      toast.error("Login failed. Please check your credentials.");
+      toast.error(error.message || "Login failed. Please check your credentials.");
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Mock register function
   const register = async (email: string, password: string, name: string) => {
     try {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Basic validation
-      if (!email.includes('@') || password.length < 6) {
-        throw new Error('Invalid registration data');
-      }
-      
-      // Mock successful registration
-      const mockUser: User = {
-        id: '1',
+      const { data, error } = await supabase.auth.signUp({
         email,
-        name,
-      };
-      
-      const mockToken = 'mock_jwt_token_' + Date.now();
-      
-      setAuth({
-        user: mockUser,
-        isAuthenticated: true,
-        token: mockToken,
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
       });
       
-      toast.success("Successfully registered!");
-    } catch (error) {
+      if (error) {
+        throw error;
+      }
+      
+      toast.success("Successfully registered! Please check your email to verify your account.");
+    } catch (error: any) {
       console.error('Registration error:', error);
-      toast.error("Registration failed. Please try again.");
+      toast.error(error.message || "Registration failed. Please try again.");
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Logout function
-  const logout = () => {
-    setAuth({
-      user: null,
-      isAuthenticated: false,
-      token: null,
-    });
-    toast.info("You have been logged out.");
+  const logout = async () => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast.info("You have been logged out.");
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error("Logout failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
