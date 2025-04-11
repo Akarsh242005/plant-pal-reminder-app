@@ -53,9 +53,15 @@ const PlantForm = ({ plant, mode }: PlantFormProps) => {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       if (mode === "add") {
+        // Ensure all required fields are present for the Plant type
         addPlant({
-          ...values,
+          name: values.name,
+          species: values.species,
+          waterFrequency: values.waterFrequency,
           lastWatered: new Date().toISOString(),
+          image: values.image,
+          notes: values.notes,
+          location: values.location,
         });
       } else if (mode === "edit" && plant) {
         updatePlant(plant.id, values);
