@@ -1,73 +1,81 @@
-# Welcome to your Lovable project
+# PlantPal - Plant Care Reminder App
 
-## Project info
+A beautiful and intuitive web app to help you never forget to water your plants again! 🌱
 
-**URL**: https://lovable.dev/projects/a98ed4c6-106c-4f3a-8667-0a3e3a454163
+PlantPal lets you track your plant collection, set custom watering schedules, and get timely reminders so your green friends stay happy and healthy.
 
-## How can I edit this code?
+## ✨ Features
 
-There are several ways of editing your application.
+- **Add & Manage Plants** — Track name, species, location, notes, and custom watering frequency
+- **Smart Watering Schedule** — Visual indicators showing when each plant needs water
+- **One-Click Watering** — Mark plants as watered with a single tap
+- **Beautiful Plant Cards** — Rich visuals with images and details
+- **User Authentication** — Secure login and registration (MongoDB backend)
+- **Responsive Design** — Works perfectly on mobile and desktop
+- **Sample Plants** — Get started quickly with beautiful example plants
 
-**Use Lovable**
+## 🛠 Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a98ed4c6-106c-4f3a-8667-0a3e3a454163) and start prompting.
+- **Frontend**: React + TypeScript + Vite
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **Backend**: MongoDB (via direct connection)
+- **State Management**: React Context
+- **Notifications**: Sonner toast library
+- **Icons**: Lucide React
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Quick Start
 
-**Use your preferred IDE**
+### Prerequisites
+- Node.js 18+
+- MongoDB running locally (`mongodb://localhost:27017`)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd plant-pal-reminder-app-main
 
-Follow these steps:
+Install dependenciesBashnpm install
+Start the development serverBashnpm run dev
+Open http://localhost:8080
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Note: Make sure MongoDB is running on your machine before starting the app.
+📱 How to Use
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Register or Login — Create an account or sign in
+Add Your Plants — Click "Add New Plant" and fill in the details
+Track Watering — Use the water button when you've watered a plant
+Stay on Schedule — Visual cues help you know which plants need attention
 
-# Step 3: Install the necessary dependencies.
-npm i
+📁 Project Structure
+textsrc/
+├── components/          # Reusable UI components
+├── contexts/            # Auth & Plant state management
+├── integrations/        # MongoDB connection
+├── pages/               # Main app pages (Dashboard, Add Plant, etc.)
+├── hooks/               # Custom React hooks
+├── types/               # TypeScript interfaces
+└── lib/                 # Utilities
+🎯 Key Pages
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+/ — Landing page
+/login — User login
+/register — User registration
+/dashboard — Main plant collection
+/add-plant — Add new plant form
+/edit-plant/:id — Edit existing plant
+/profile — User profile
+/settings — App preferences
 
-**Edit a file directly in GitHub**
+🌟 Highlights
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Clean, modern, plant-friendly UI
+Persistent data with MongoDB
+Real-time watering status updates
+Fully responsive mobile-first design
+Built with modern React patterns and TypeScript
 
-**Use GitHub Codespaces**
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/a98ed4c6-106c-4f3a-8667-0a3e3a454163) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes it is!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Built with ❤️ for plant lovers everywhere.
+Never forget to water your plants again!
